@@ -63,8 +63,8 @@ are not visible to Codex through the container filesystem.
 ├── safe-codex/
 │   ├── bin/
 │   │   ├── codex-start
-│   │   ├── codex-sync
-│   │   └── codex-import
+│   │   ├── codex-pull
+│   │   └── codex-push
 │   │
 │   ├── container/
 │   │   ├── Dockerfile
@@ -112,7 +112,7 @@ Codex authentication and configuration are persisted through:
 
 This directory is sensitive and must never be committed.
 
-### `codex-sync`
+### `codex-pull`
 
 Updates the AI-safe project from the corresponding real repository.
 
@@ -120,7 +120,7 @@ Run from the safe project:
 
 ```bash
 cd ~/git/safe-codex/work/summit-application
-codex-sync
+codex-pull
 ```
 
 Direction:
@@ -138,7 +138,7 @@ Uncommitted files, ignored files, and `.env` files are not copied.
 
 The safe working tree must be clean before synchronization.
 
-### `codex-import`
+### `codex-push`
 
 Imports committed Codex changes into the real project.
 
@@ -146,7 +146,7 @@ Run from the safe project:
 
 ```bash
 cd ~/git/safe-codex/work/summit-application
-codex-import
+codex-push
 ```
 
 Direction:
@@ -187,7 +187,7 @@ cd ~/git/safe-codex/work/summit-application
 Bring in the latest committed real-project changes:
 
 ```bash
-codex-sync
+codex-pull
 ```
 
 Start Codex:
@@ -209,7 +209,7 @@ git diff HEAD~1
 When satisfied:
 
 ```bash
-codex-import
+codex-push
 ```
 
 Review the import preview and confirm it.
@@ -341,7 +341,7 @@ The intended trust boundary is:
         + .env
              ^
              |
-        Git import/sync
+        Git push/pull
              |
              v
        Safe Git clone
@@ -358,3 +358,35 @@ The intended trust boundary is:
 Codex operates on a disposable, credential-free Git copy.
 
 Git commits are the controlled bridge between that copy and the real development repository.
+
+## Keeping Git History Clean
+
+During development, multiple `codex-push` / `codex-pull` cycles are fine. Codex commits can be treated as temporary checkpoints until the work is ready to push upstream.
+
+Typical workflow:
+
+```text
+codex-pull
+codex-start
+codex-push
+test
+codex-pull
+codex-start
+codex-push
+test
+```
+
+Before pushing the real repository upstream, squash all local commits since `origin/main` into one clean commit:
+
+```bash
+git fetch origin
+git reset --soft origin/main
+git status
+git diff --cached --stat
+git commit -m "Describe completed work"
+git push
+```
+
+This keeps the intermediate Codex commits locally useful during development while only publishing the final clean commit.
+
+> **Note:** This squashes **all** local commits since `origin/main`, not only Codex commits. Only use it when those commits should all become one logical change.
