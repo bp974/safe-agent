@@ -1,0 +1,15 @@
+# Codex authentication and local configuration
+# Contains credentials/tokens and must never be committed.
+container/home/
+
+# AI-safe project clones
+# Each project is its own independent Git repository.
+work/
+
+# macOS
+.DS_Store
+
+# Editor files
+*.swp
+*.swo
+*~
