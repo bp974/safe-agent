@@ -1,0 +1,142 @@
+#!/bin/bash
+
+set -e
+
+SAFE_CODEX="$HOME/git/safe-codex"
+CODEX_ROOT="$SAFE_CODEX/work"
+REAL_ROOT="$HOME/git"
+
+CURRENT_DIR="$(pwd -P)"
+
+case "$CURRENT_DIR" in
+    "$CODEX_ROOT"/*)
+        ;;
+    *)
+        echo "ERROR: Run codex-pull from a project inside:"
+        echo "  $CODEX_ROOT/"
+        exit 1
+        ;;
+esac
+
+PROJECT="$(basename "$CURRENT_DIR")"
+REAL_PROJECT="$REAL_ROOT/$PROJECT"
+
+if [ ! -d "$CURRENT_DIR/.git" ]; then
+    echo "ERROR: Current directory is not a Git repository."
+    exit 1
+fi
+
+if [ ! -d "$REAL_PROJECT/.git" ]; then
+    echo "ERROR: Matching real repository not found:"
+    echo "  $REAL_PROJECT"
+    exit 1
+fi
+
+# Never overwrite uncommitted Codex work.
+if [ -n "$(git -C "$CURRENT_DIR" status --porcelain)" ]; then
+    echo "ERROR: Codex workspace has uncommitted changes."
+    echo
+    git -C "$CURRENT_DIR" status --short
+    echo
+    echo "Commit or discard them before pulling."
+    exit 1
+fi
+
+# Only committed state from the real repository is transferred.
+if [ -n "$(git -C "$REAL_PROJECT" status --porcelain)" ]; then
+    echo "ERROR: Real repository has uncommitted changes."
+    echo
+    git -C "$REAL_PROJECT" status --short
+    echo
+    echo "Commit or stash them before pulling."
+    exit 1
+fi
+
+echo "Pulling:"
+echo "  $REAL_PROJECT"
+echo "       ↓"
+echo "  $CURRENT_DIR"
+echo
+
+# Fetch the real repository's HEAD into the safe repository.
+git -C "$CURRENT_DIR" fetch "$REAL_PROJECT" HEAD
+
+SAFE_HEAD="$(git -C "$CURRENT_DIR" rev-parse HEAD)"
+REAL_HEAD="$(git -C "$CURRENT_DIR" rev-parse FETCH_HEAD)"
+
+# Already synchronized.
+if [ "$SAFE_HEAD" = "$REAL_HEAD" ]; then
+    echo
+    echo "Already up to date."
+    exit 0
+fi
+
+# Normal case:
+# Safe HEAD is behind real HEAD, so a fast-forward is possible.
+if git -C "$CURRENT_DIR" merge-base --is-ancestor \
+    "$SAFE_HEAD" "$REAL_HEAD"; then
+
+    echo
+    echo "Changes to pull:"
+    echo
+
+    git -C "$CURRENT_DIR" --no-pager log \
+        --oneline \
+        "$SAFE_HEAD..$REAL_HEAD"
+
+    echo
+    git -C "$CURRENT_DIR" merge --ff-only "$REAL_HEAD"
+
+    echo
+    echo "Pull complete."
+    exit 0
+fi
+
+# Safe repository contains commits not present in real repository.
+# This can happen normally after the real repository has been squashed.
+echo
+echo "Safe Codex history differs from the real repository."
+echo
+echo "This commonly happens after local commits in the real repository"
+echo "have been squashed before pushing upstream."
+echo
+echo "Safe HEAD:"
+git -C "$CURRENT_DIR" --no-pager log -1 --oneline "$SAFE_HEAD"
+
+echo
+echo "Real HEAD:"
+git -C "$CURRENT_DIR" --no-pager log -1 --oneline "$REAL_HEAD"
+
+echo
+echo "Resetting will discard committed history from the SAFE copy and"
+echo "make it exactly match the real repository."
+echo
+echo "The real repository will NOT be modified."
+echo
+echo "Safe repository:"
+echo "  $CURRENT_DIR"
+echo
+echo "Will be reset to:"
+echo "  $REAL_PROJECT"
+echo
+
+read -r -p "Reset safe copy to real repository? [y/N] " RESPONSE
+
+case "$RESPONSE" in
+    y|Y|yes|YES|Yes)
+        ;;
+    *)
+        echo "Pull cancelled."
+        exit 0
+        ;;
+esac
+
+echo
+
+git -C "$CURRENT_DIR" reset --hard "$REAL_HEAD"
+
+echo
+echo "Safe copy reset successfully."
+echo
+echo "Current HEAD:"
+git -C "$CURRENT_DIR" --no-pager log -1 --oneline
