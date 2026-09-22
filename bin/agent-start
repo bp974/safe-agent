@@ -46,6 +46,9 @@ case "$CURRENT_DIR" in
         ;;
 esac
 
+SECOND_HOME_MOUNT=""
+SECOND_CONTAINER_HOME=""
+
 # Configure the selected agent.
 case "$AGENT" in
     codex)
@@ -62,8 +65,11 @@ case "$AGENT" in
 
     opencode)
         COMMAND="opencode"
-        HOME_MOUNT="$AGENT_HOME/opencode"
+        HOME_MOUNT="$AGENT_HOME/opencode/config"
         CONTAINER_HOME="/root/.config/opencode"
+
+        SECOND_HOME_MOUNT="$AGENT_HOME/opencode/data"
+        SECOND_CONTAINER_HOME="/root/.local/share/opencode"
         ;;
 
     *)
@@ -81,6 +87,11 @@ esac
 mkdir -p "$HOME_MOUNT"
 chmod 700 "$HOME_MOUNT"
 
+if [ -n "$SECOND_HOME_MOUNT" ]; then
+    mkdir -p "$SECOND_HOME_MOUNT"
+    chmod 700 "$SECOND_HOME_MOUNT"
+fi
+
 echo "Agent:"
 echo "  $AGENT"
 echo
@@ -91,10 +102,20 @@ echo "Only this workspace and the agent's persistent config"
 echo "directory will be mounted into the container."
 echo
 
+EXTRA_MOUNTS=()
+
+if [ -n "$SECOND_HOME_MOUNT" ]; then
+    EXTRA_MOUNTS+=(
+        --mount "type=bind,source=$SECOND_HOME_MOUNT,target=$SECOND_CONTAINER_HOME"
+    )
+fi
+
 docker run --rm -it \
     --env GIT_USER_NAME="${GIT_USER_NAME:-}" \
     --env GIT_USER_EMAIL="${GIT_USER_EMAIL:-}" \
+    --env CODEX_HOME=/root/.codex \
     --mount type=bind,source="$HOME_MOUNT",target="$CONTAINER_HOME" \
+    "${EXTRA_MOUNTS[@]}" \
     --mount type=bind,source="$CURRENT_DIR",target=/workspace \
     --workdir /workspace \
     safe-agent \
