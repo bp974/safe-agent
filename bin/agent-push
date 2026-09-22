@@ -2,19 +2,19 @@
 
 set -e
 
-SAFE_CODEX="$HOME/git/safe-codex"
-CODEX_ROOT="$SAFE_CODEX/work"
+SAFE_AGENT="$HOME/git/safe-agent"
+AGENT_ROOT="$SAFE_AGENT/work"
 REAL_ROOT="$HOME/git"
 
 CURRENT_DIR="$(pwd -P)"
 
-# Must run from a project inside the safe Codex workspace.
+# Must run from a project inside the safe agent workspace.
 case "$CURRENT_DIR" in
-    "$CODEX_ROOT"/*)
+    "$AGENT_ROOT"/*)
         ;;
     *)
-        echo "ERROR: Run codex-push from a project inside:"
-        echo "  $CODEX_ROOT/"
+        echo "ERROR: Run agent-push from a project inside:"
+        echo "  $AGENT_ROOT/"
         exit 1
         ;;
 esac
@@ -33,9 +33,9 @@ if [ ! -d "$REAL_PROJECT/.git" ]; then
     exit 1
 fi
 
-# Codex workspace must be clean.
+# Safe agent workspace must be clean.
 if [ -n "$(git -C "$CURRENT_DIR" status --porcelain)" ]; then
-    echo "ERROR: Codex workspace has uncommitted changes."
+    echo "ERROR: Safe agent workspace has uncommitted changes."
     echo "Commit or discard them before pushing."
     exit 1
 fi
@@ -50,34 +50,34 @@ if [ -n "$(git -C "$REAL_PROJECT" status --porcelain)" ]; then
     exit 1
 fi
 
-echo "Checking committed Codex work:"
+echo "Checking committed agent work:"
 echo
 echo "  $CURRENT_DIR"
 echo "       ↓"
 echo "  $REAL_PROJECT"
 echo
 
-# Fetch Codex HEAD into the real repository.
+# Fetch the safe workspace HEAD into the real repository.
 git -C "$REAL_PROJECT" fetch "$CURRENT_DIR" HEAD
 
 # Capture the exact fetched commit.
-IMPORT_COMMIT="$(git -C "$REAL_PROJECT" rev-parse FETCH_HEAD)"
+AGENT_COMMIT="$(git -C "$REAL_PROJECT" rev-parse FETCH_HEAD)"
 REAL_HEAD="$(git -C "$REAL_PROJECT" rev-parse HEAD)"
 
 # Already identical?
-if [ "$IMPORT_COMMIT" = "$REAL_HEAD" ]; then
+if [ "$AGENT_COMMIT" = "$REAL_HEAD" ]; then
     echo "Nothing to push."
     exit 0
 fi
 
-# Require real HEAD to be an ancestor of the Codex commit.
-# This guarantees the push can be a clean fast-forward.
+# Require real HEAD to be an ancestor of the agent commit.
+# This guarantees the push can be performed as a clean fast-forward.
 if ! git -C "$REAL_PROJECT" merge-base --is-ancestor \
-    "$REAL_HEAD" "$IMPORT_COMMIT"; then
+    "$REAL_HEAD" "$AGENT_COMMIT"; then
 
-    echo "ERROR: Real and Codex repositories have diverged."
+    echo "ERROR: Real and safe agent repositories have diverged."
     echo
-    echo "Push aborted. Run codex-sync or reconcile the histories manually."
+    echo "Push aborted. Run agent-pull or reconcile the histories manually."
     exit 1
 fi
 
@@ -86,7 +86,7 @@ echo
 
 git -C "$REAL_PROJECT" --no-pager log \
     --oneline \
-    "$REAL_HEAD..$IMPORT_COMMIT"
+    "$REAL_HEAD..$AGENT_COMMIT"
 
 echo
 echo "Files changed:"
@@ -95,7 +95,7 @@ echo
 git -C "$REAL_PROJECT" --no-pager diff \
     --name-status \
     "$REAL_HEAD" \
-    "$IMPORT_COMMIT"
+    "$AGENT_COMMIT"
 
 echo
 echo "Change summary:"
@@ -104,7 +104,7 @@ echo
 git -C "$REAL_PROJECT" --no-pager diff \
     --stat \
     "$REAL_HEAD" \
-    "$IMPORT_COMMIT"
+    "$AGENT_COMMIT"
 
 echo
 echo "This will modify your REAL working copy:"
@@ -112,7 +112,7 @@ echo "  $REAL_PROJECT"
 echo
 
 read -r -p "Continue with push? [y/N] " RESPONSE
-#
+
 case "$RESPONSE" in
     y|Y|yes|YES|Yes)
         ;;
@@ -126,7 +126,7 @@ echo
 
 git -C "$REAL_PROJECT" merge \
     --ff-only \
-    "$IMPORT_COMMIT"
+    "$AGENT_COMMIT"
 
 echo
 echo "Push complete."

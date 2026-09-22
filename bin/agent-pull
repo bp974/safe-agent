@@ -2,18 +2,19 @@
 
 set -e
 
-SAFE_CODEX="$HOME/git/safe-codex"
-CODEX_ROOT="$SAFE_CODEX/work"
+SAFE_AGENT="$HOME/git/safe-agent"
+AGENT_ROOT="$SAFE_AGENT/work"
 REAL_ROOT="$HOME/git"
 
 CURRENT_DIR="$(pwd -P)"
 
+# Must run from a project inside the safe agent workspace.
 case "$CURRENT_DIR" in
-    "$CODEX_ROOT"/*)
+    "$AGENT_ROOT"/*)
         ;;
     *)
-        echo "ERROR: Run codex-pull from a project inside:"
-        echo "  $CODEX_ROOT/"
+        echo "ERROR: Run agent-pull from a project inside:"
+        echo "  $AGENT_ROOT/"
         exit 1
         ;;
 esac
@@ -32,9 +33,9 @@ if [ ! -d "$REAL_PROJECT/.git" ]; then
     exit 1
 fi
 
-# Never overwrite uncommitted Codex work.
+# Never overwrite uncommitted work in the safe agent workspace.
 if [ -n "$(git -C "$CURRENT_DIR" status --porcelain)" ]; then
-    echo "ERROR: Codex workspace has uncommitted changes."
+    echo "ERROR: Safe agent workspace has uncommitted changes."
     echo
     git -C "$CURRENT_DIR" status --short
     echo
@@ -58,7 +59,7 @@ echo "       ↓"
 echo "  $CURRENT_DIR"
 echo
 
-# Fetch the real repository's HEAD into the safe repository.
+# Fetch the real repository's HEAD into the safe agent repository.
 git -C "$CURRENT_DIR" fetch "$REAL_PROJECT" HEAD
 
 SAFE_HEAD="$(git -C "$CURRENT_DIR" rev-parse HEAD)"
@@ -92,13 +93,14 @@ if git -C "$CURRENT_DIR" merge-base --is-ancestor \
     exit 0
 fi
 
-# Safe repository contains commits not present in real repository.
-# This can happen normally after the real repository has been squashed.
+# The safe repository contains commits not present in the real repository.
+# This commonly happens after commits in the real repository are squashed.
 echo
-echo "Safe Codex history differs from the real repository."
+echo "Safe agent history differs from the real repository."
 echo
 echo "This commonly happens after local commits in the real repository"
 echo "have been squashed before pushing upstream."
+
 echo
 echo "Safe HEAD:"
 git -C "$CURRENT_DIR" --no-pager log -1 --oneline "$SAFE_HEAD"

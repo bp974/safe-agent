@@ -7,11 +7,12 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @openai/codex
-
-RUN git config --system user.name "Brett Pelkey" && \
-    git config --system user.email "btp974@gmail.com"
+# Install supported coding agents.
+RUN npm install -g \
+    @openai/codex \
+    @anthropic-ai/claude-code \
+    @opencode/cli
 
 WORKDIR /workspace
 
-CMD ["codex"]
+CMD ["bash"]

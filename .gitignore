@@ -13,3 +13,6 @@ work/
 *.swp
 *.swo
 *~
+
+# env files
+.env

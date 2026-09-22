@@ -1,8 +1,14 @@
-# Safe Codex
+# Safe Agent
 
-A Docker-based environment for running OpenAI Codex against isolated copies of local Git repositories.
+A Docker-based environment for running AI coding agents against isolated copies of local Git repositories.
 
-The goal is to allow Codex to modify project source code without giving the container access to the real development directory, `.env` files, SSH keys, or other files in the host user's home directory.
+Supported agents:
+
+- OpenAI Codex
+- Claude Code
+- OpenCode
+
+The goal is to allow coding agents to modify project source code without giving the container access to the real development directory, `.env` files, SSH keys, or other files in the host user's home directory.
 
 ## Security Model
 
@@ -15,32 +21,32 @@ Real projects live under:
 For example:
 
 ```text
-~/git/summit-application/
+~/git/example-project/
 ├── .git/
 ├── .env
 ├── app.js
 └── ...
 ```
 
-Codex does **not** work directly against this directory.
+Agents do **not** work directly against this directory.
 
 Instead, an independent Git clone is kept under:
 
 ```text
-~/git/safe-codex/work/
+~/git/safe-agent/work/
 ```
 
 For example:
 
 ```text
-~/git/safe-codex/work/summit-application/
+~/git/safe-agent/work/example-project/
 ```
 
-The Codex Docker container receives only two host mounts:
+The Docker container receives only two host mounts:
 
 ```text
 Safe project clone  -> /workspace
-Codex home          -> /root/.codex
+Agent config         -> agent-specific config directory
 ```
 
 The real project directory is never mounted into the container.
@@ -48,79 +54,150 @@ The real project directory is never mounted into the container.
 Therefore files such as:
 
 ```text
-~/git/summit-application/.env
+~/git/example-project/.env
 ~/.ssh/
 other ~/git projects
 other files in ~/
 ```
 
-are not visible to Codex through the container filesystem.
+are not visible to the agent through the container filesystem.
 
 ## Directory Layout
 
 ```text
 ~/git/
-├── safe-codex/
+├── safe-agent/
 │   ├── bin/
-│   │   ├── codex-start
-│   │   ├── codex-pull
-│   │   └── codex-push
+│   │   ├── agent-start
+│   │   ├── agent-pull
+│   │   └── agent-push
 │   │
 │   ├── container/
 │   │   ├── Dockerfile
-│   │   └── home/               # ignored; contains Codex auth/config
+│   │   └── home/
+│   │       ├── codex/
+│   │       ├── claude/
+│   │       └── opencode/
 │   │
-│   ├── work/                   # ignored; contains AI-safe clones
-│   │   ├── summit-application/
+│   ├── work/
+│   │   ├── example-project/
 │   │   └── ...
 │   │
+│   ├── .env
+│   ├── .env.example
 │   ├── .gitignore
 │   └── README.md
 │
-├── summit-application/         # real project
+├── example-project/
 │   └── .env
 │
 └── ...
 ```
 
-## Commands
+`container/home/`, `work/`, and `.env` should be excluded from Git.
 
-### `codex-start`
+## Initial Setup
 
-Starts Codex inside the Docker container.
-
-Run it from an AI-safe project:
+Copy the example configuration:
 
 ```bash
-cd ~/git/safe-codex/work/summit-application
-codex-start
+cd ~/git/safe-agent
+cp .env.example .env
 ```
 
-The script refuses to start Codex from directories outside:
+Configure your Git identity and preferred default agent:
+
+```bash
+GIT_USER_NAME="Your Name"
+GIT_USER_EMAIL="you@example.com"
+DEFAULT_AGENT="codex"
+```
+
+Valid default agents are:
 
 ```text
-~/git/safe-codex/work/
+codex
+claude
+opencode
 ```
 
-Only the current safe project is mounted as `/workspace`.
+The `.env` file contains local configuration and should never be committed.
 
-Codex authentication and configuration are persisted through:
+Add the scripts directory to your PATH:
+
+```bash
+export PATH="$HOME/git/safe-agent/bin:$PATH"
+```
+
+Add that line to `~/.zshrc` or your shell's equivalent to make it permanent.
+
+## Building the Container
+
+Build the shared agent image:
+
+```bash
+cd ~/git/safe-agent
+docker build -t safe-agent ./container
+```
+
+The image contains:
+
+- OpenAI Codex
+- Claude Code
+- OpenCode
+- Git
+- Common development/build tools
+
+Git identity is supplied at runtime from `.env` rather than being stored in the Docker image.
+
+Rebuild the image after modifying the Dockerfile:
+
+```bash
+docker build -t safe-agent ./container
+```
+
+## Commands
+
+### `agent-start`
+
+Starts an AI coding agent inside the isolated Docker container.
+
+Run from a safe project:
+
+```bash
+cd ~/git/safe-agent/work/example-project
+agent-start
+```
+
+With no argument, the agent configured by `DEFAULT_AGENT` in `.env` is used.
+
+An agent can also be selected explicitly:
+
+```bash
+agent-start codex
+agent-start claude
+agent-start opencode
+```
+
+The explicit argument overrides `DEFAULT_AGENT`.
+
+The script refuses to start from directories outside:
 
 ```text
-~/git/safe-codex/container/home/
+~/git/safe-agent/work/
 ```
 
-This directory is sensitive and must never be committed.
+Only the current safe project and the selected agent's persistent configuration directory are mounted into the container.
 
-### `codex-pull`
+### `agent-pull`
 
-Updates the AI-safe project from the corresponding real repository.
+Updates the safe project from the corresponding real repository.
 
 Run from the safe project:
 
 ```bash
-cd ~/git/safe-codex/work/summit-application
-codex-pull
+cd ~/git/safe-agent/work/example-project
+agent-pull
 ```
 
 Direction:
@@ -129,76 +206,88 @@ Direction:
 REAL PROJECT
      |
      v
-SAFE CODEX COPY
+SAFE AGENT COPY
 ```
 
 Synchronization is Git-based and uses committed history.
 
 Uncommitted files, ignored files, and `.env` files are not copied.
 
-The safe working tree must be clean before synchronization.
+Both working trees must be clean before pulling.
 
-### `codex-push`
+If the safe and real histories differ, such as after squashing commits in the real repository, `agent-pull` can reset the safe copy after explicit confirmation.
 
-Imports committed Codex changes into the real project.
+The real repository is never modified by this reset.
+
+### `agent-push`
+
+Imports committed agent changes into the real project.
 
 Run from the safe project:
 
 ```bash
-cd ~/git/safe-codex/work/summit-application
-codex-push
+cd ~/git/safe-agent/work/example-project
+agent-push
 ```
 
 Direction:
 
 ```text
-SAFE CODEX COPY
+SAFE AGENT COPY
      |
      v
 REAL PROJECT
 ```
 
-Before importing, the script:
+Before pushing, the script:
 
 1. Requires both working trees to be clean.
-2. Fetches the committed Codex changes.
-3. Verifies that the import can be performed as a Git fast-forward.
-4. Displays the commits and files being imported.
+2. Fetches the committed safe-agent changes.
+3. Verifies that the update can be performed as a Git fast-forward.
+4. Displays the commits and files being transferred.
 5. Requires interactive confirmation.
 6. Fast-forwards the real repository.
 
-If the repositories have diverged, the import is refused rather than automatically merging them.
+If the repositories have diverged, the push is refused rather than automatically merging them.
 
 ## Normal Workflow
 
 Start with work in the real repository committed:
 
 ```bash
-cd ~/git/summit-application
+cd ~/git/example-project
 git status
 ```
 
 Move to the corresponding safe clone:
 
 ```bash
-cd ~/git/safe-codex/work/summit-application
+cd ~/git/safe-agent/work/example-project
 ```
 
 Bring in the latest committed real-project changes:
 
 ```bash
-codex-pull
+agent-pull
 ```
 
-Start Codex:
+Start your preferred agent:
 
 ```bash
-codex-start
+agent-start
 ```
 
-Have Codex make and commit its changes.
+Or select one explicitly:
 
-After exiting Codex, review the safe repository:
+```bash
+agent-start codex
+agent-start claude
+agent-start opencode
+```
+
+Have the agent make and commit its changes.
+
+After exiting the agent, review the safe repository:
 
 ```bash
 git status
@@ -209,15 +298,15 @@ git diff HEAD~1
 When satisfied:
 
 ```bash
-codex-push
+agent-push
 ```
 
-Review the import preview and confirm it.
+Review the preview and confirm it.
 
 Then return to the real project:
 
 ```bash
-cd ~/git/summit-application
+cd ~/git/example-project
 ```
 
 Test normally using the real development environment and `.env`.
@@ -226,12 +315,10 @@ Push through the normal Git workflow when ready.
 
 ## Adding a Project
 
-Create a safe clone under `work/`.
-
-For example:
+Create a safe clone under `work/`:
 
 ```bash
-cd ~/git/safe-codex/work
+cd ~/git/safe-agent/work
 git clone ~/git/example-project example-project
 ```
 
@@ -239,7 +326,7 @@ The project directory name should match the real project directory name:
 
 ```text
 ~/git/example-project
-~/git/safe-codex/work/example-project
+~/git/safe-agent/work/example-project
 ```
 
 Remove the automatically created local `origin`:
@@ -257,7 +344,7 @@ git remote -v
 
 No remote should be listed unless one is intentionally configured.
 
-Before using Codex, verify that secrets were not committed into the repository:
+Before using an agent, verify that secrets were not committed into the repository:
 
 ```bash
 find . \
@@ -270,42 +357,22 @@ find . \
 
 Files such as `.env.example` may be intentionally present if they contain only non-secret example values.
 
-## Building the Container
+## Agent Configuration
 
-From the Safe Codex repository:
-
-```bash
-cd ~/git/safe-codex
-docker build -t codex-dev ./container
-```
-
-The image contains the Codex CLI and development tools required for the isolated environment.
-
-Git identity is configured inside the image so Codex can create commits without mounting the host's `~/.gitconfig`.
-
-Rebuild the image after modifying the Dockerfile:
-
-```bash
-docker build -t codex-dev ./container
-```
-
-## Codex Configuration
-
-Codex state is stored at:
+Persistent agent state is stored separately:
 
 ```text
-~/git/safe-codex/container/home/
+~/git/safe-agent/container/home/
+├── codex/
+├── claude/
+└── opencode/
 ```
 
-Inside the container this is mounted at:
+These directories allow authentication and configuration to survive container recreation.
 
-```text
-/root/.codex
-```
+Only the selected agent's directory is mounted when `agent-start` runs.
 
-This allows authentication and Codex configuration to survive container recreation.
-
-The directory may contain authentication credentials and must:
+These directories may contain authentication credentials and must:
 
 - remain excluded by `.gitignore`
 - never be shared
@@ -323,11 +390,11 @@ Do not modify the Docker launcher to mount:
 /var/run/docker.sock
 ```
 
-The security boundary depends on the Codex container having access only to the safe project copy and its own Codex configuration directory.
+The security boundary depends on the container having access only to the safe project copy and the selected agent's configuration directory.
 
 Never place real credentials in the safe project clone.
 
-Keep secrets such as `.env` files exclusively in the real development repository and ensure they are excluded from Git.
+Keep secrets such as application `.env` files exclusively in the real development repository and ensure they are excluded from Git.
 
 ## Design Principle
 
@@ -341,7 +408,7 @@ The intended trust boundary is:
         + .env
              ^
              |
-        Git push/pull
+       agent-push/pull
              |
              v
        Safe Git clone
@@ -349,30 +416,30 @@ The intended trust boundary is:
              | bind mount
              v
     +-------------------+
-    |  Codex container  |
+    |  Agent container  |
     |                   |
     |    /workspace     |
     +-------------------+
 ```
 
-Codex operates on a disposable, credential-free Git copy.
+The coding agent operates on a credential-free Git copy.
 
 Git commits are the controlled bridge between that copy and the real development repository.
 
 ## Keeping Git History Clean
 
-During development, multiple `codex-push` / `codex-pull` cycles are fine. Codex commits can be treated as temporary checkpoints until the work is ready to push upstream.
+During development, multiple `agent-push` / `agent-pull` cycles are fine. Agent commits can be treated as temporary checkpoints until the work is ready to push upstream.
 
 Typical workflow:
 
 ```text
-codex-pull
-codex-start
-codex-push
+agent-pull
+agent-start
+agent-push
 test
-codex-pull
-codex-start
-codex-push
+agent-pull
+agent-start
+agent-push
 test
 ```
 
@@ -387,6 +454,8 @@ git commit -m "Describe completed work"
 git push
 ```
 
-This keeps the intermediate Codex commits locally useful during development while only publishing the final clean commit.
+This keeps intermediate agent commits useful during development while only publishing the final clean commit.
 
-> **Note:** This squashes **all** local commits since `origin/main`, not only Codex commits. Only use it when those commits should all become one logical change.
+After squashing, the safe repository will have different Git history. The next `agent-pull` will detect this and offer to reset the safe copy to match the real repository.
+
+> **Note:** This squashes **all** local commits since `origin/main`, not only agent-generated commits. Only use it when those commits should all become one logical change.

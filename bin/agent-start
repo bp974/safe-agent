@@ -1,0 +1,111 @@
+#!/bin/bash
+
+set -e
+
+SAFE_AGENT="$HOME/git/safe-agent"
+AGENT_ROOT="$SAFE_AGENT/work"
+AGENT_HOME="$SAFE_AGENT/container/home"
+CONFIG_FILE="$SAFE_AGENT/.env"
+
+# Load user-specific configuration.
+if [ -f "$CONFIG_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$CONFIG_FILE"
+    set +a
+fi
+
+# Defaults.
+DEFAULT_AGENT="${DEFAULT_AGENT:-codex}"
+
+if [ -z "${GIT_USER_NAME:-}" ] || [ -z "${GIT_USER_EMAIL:-}" ]; then
+    echo "ERROR: Git identity is not configured."
+    echo
+    echo "Copy .env.example to .env and configure:"
+    echo "  GIT_USER_NAME"
+    echo "  GIT_USER_EMAIL"
+    exit 1
+fi
+
+CURRENT_DIR="$(pwd -P)"
+AGENT="${1:-$DEFAULT_AGENT}"
+
+# Refuse to run anywhere except underneath the safe workspace.
+case "$CURRENT_DIR" in
+    "$AGENT_ROOT"/*)
+        ;;
+    *)
+        echo "ERROR: Refusing to start agent."
+        echo
+        echo "Current directory:"
+        echo "  $CURRENT_DIR"
+        echo
+        echo "Agents may only run inside:"
+        echo "  $AGENT_ROOT/"
+        exit 1
+        ;;
+esac
+
+# Configure the selected agent.
+case "$AGENT" in
+    codex)
+        COMMAND="codex"
+        HOME_MOUNT="$AGENT_HOME/codex"
+        CONTAINER_HOME="/root/.codex"
+        ;;
+
+    claude)
+        COMMAND="claude"
+        HOME_MOUNT="$AGENT_HOME/claude"
+        CONTAINER_HOME="/root/.claude"
+        ;;
+
+    opencode)
+        COMMAND="opencode"
+        HOME_MOUNT="$AGENT_HOME/opencode"
+        CONTAINER_HOME="/root/.config/opencode"
+        ;;
+
+    *)
+        echo "ERROR: Unknown agent: $AGENT"
+        echo
+        echo "Supported agents:"
+        echo "  codex"
+        echo "  claude"
+        echo "  opencode"
+        exit 1
+        ;;
+esac
+
+# Create the agent's persistent configuration directory if needed.
+mkdir -p "$HOME_MOUNT"
+chmod 700 "$HOME_MOUNT"
+
+echo "Agent:"
+echo "  $AGENT"
+echo
+echo "Workspace:"
+echo "  $CURRENT_DIR"
+echo
+echo "Only this workspace and the agent's persistent config"
+echo "directory will be mounted into the container."
+echo
+
+docker run --rm -it \
+    --env GIT_USER_NAME="${GIT_USER_NAME:-}" \
+    --env GIT_USER_EMAIL="${GIT_USER_EMAIL:-}" \
+    --mount type=bind,source="$HOME_MOUNT",target="$CONTAINER_HOME" \
+    --mount type=bind,source="$CURRENT_DIR",target=/workspace \
+    --workdir /workspace \
+    safe-agent \
+    bash -c '
+        if [ -n "$GIT_USER_NAME" ]; then
+            git config --global user.name "$GIT_USER_NAME"
+        fi
+
+        if [ -n "$GIT_USER_EMAIL" ]; then
+            git config --global user.email "$GIT_USER_EMAIL"
+        fi
+
+        exec "$@"
+    ' bash "$COMMAND"
