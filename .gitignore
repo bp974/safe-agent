@@ -1,4 +1,4 @@
-# Codex authentication and local configuration
+# Local configuration files
 # Contains credentials/tokens and must never be committed.
 container/home/
 
@@ -14,5 +14,5 @@ work/
 *.swo
 *~
 
-# env files
+# real env
 .env

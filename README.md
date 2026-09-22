@@ -12,11 +12,7 @@ The goal is to allow coding agents to modify project source code without giving 
 
 ## Security Model
 
-Real projects live under:
-
-```text
-~/git/
-```
+Real projects live under a user-configured project root.
 
 For example:
 
@@ -30,23 +26,16 @@ For example:
 
 Agents do **not** work directly against this directory.
 
-Instead, an independent Git clone is kept under:
+Instead, independent Git clones are kept inside the Safe Agent installation:
 
 ```text
-~/git/safe-agent/work/
+safe-agent/work/
 ```
 
 For example:
 
 ```text
-~/git/safe-agent/work/example-project/
-```
-
-The Docker container receives only two host mounts:
-
-```text
-Safe project clone  -> /workspace
-Agent config         -> agent-specific config directory
+safe-agent/work/example-project/
 ```
 
 The real project directory is never mounted into the container.
@@ -56,13 +45,19 @@ Therefore files such as:
 ```text
 ~/git/example-project/.env
 ~/.ssh/
-other ~/git projects
+other projects
 other files in ~/
 ```
 
 are not visible to the agent through the container filesystem.
 
+Git commits provide the controlled bridge between the safe copy and the real repository.
+
 ## Directory Layout
+
+Safe Agent can be cloned anywhere.
+
+For example:
 
 ```text
 ~/git/
@@ -78,6 +73,8 @@ are not visible to the agent through the container filesystem.
 │   │       ├── codex/
 │   │       ├── claude/
 │   │       └── opencode/
+│   │           ├── config/
+│   │           └── data/
 │   │
 │   ├── work/
 │   │   ├── example-project/
@@ -94,23 +91,59 @@ are not visible to the agent through the container filesystem.
 └── ...
 ```
 
-`container/home/`, `work/`, and `.env` should be excluded from Git.
+The Safe Agent scripts automatically determine where Safe Agent itself is installed.
+
+The location of real projects is configured separately using `REAL_PROJECT_ROOT`.
+
+`container/home/`, `work/`, and `.env` must be excluded from Git.
 
 ## Initial Setup
+
+Clone Safe Agent wherever you want to keep it and enter the repository:
+
+```bash
+cd /path/to/safe-agent
+```
 
 Copy the example configuration:
 
 ```bash
-cd ~/git/safe-agent
 cp .env.example .env
 ```
 
-Configure your Git identity and preferred default agent:
+Configure your local settings:
 
 ```bash
 GIT_USER_NAME="Your Name"
 GIT_USER_EMAIL="you@example.com"
+REAL_PROJECT_ROOT="$HOME/git"
 DEFAULT_AGENT="codex"
+```
+
+`REAL_PROJECT_ROOT` is the directory containing your real development repositories.
+
+For example:
+
+```text
+REAL_PROJECT_ROOT="$HOME/git"
+
+$HOME/git/example-project
+$HOME/git/another-project
+```
+
+Safe Agent does not need to be located inside `REAL_PROJECT_ROOT`.
+
+For example, this is also valid:
+
+```text
+~/tools/safe-agent/
+~/development/example-project/
+```
+
+with:
+
+```bash
+REAL_PROJECT_ROOT="$HOME/development"
 ```
 
 Valid default agents are:
@@ -121,22 +154,25 @@ claude
 opencode
 ```
 
-The `.env` file contains local configuration and should never be committed.
+The `.env` file contains local configuration and must never be committed.
 
-Add the scripts directory to your PATH:
+## Add Safe Agent to PATH
+
+Add the Safe Agent `bin` directory to your PATH.
+
+For example:
 
 ```bash
-export PATH="$HOME/git/safe-agent/bin:$PATH"
+export PATH="/path/to/safe-agent/bin:$PATH"
 ```
 
-Add that line to `~/.zshrc` or your shell's equivalent to make it permanent.
+Add the appropriate line to `~/.zshrc`, `~/.bashrc`, or your shell's equivalent to make it permanent.
 
 ## Building the Container
 
-Build the shared agent image:
+From the Safe Agent repository:
 
 ```bash
-cd ~/git/safe-agent
 docker build -t safe-agent ./container
 ```
 
@@ -162,10 +198,10 @@ docker build -t safe-agent ./container
 
 Starts an AI coding agent inside the isolated Docker container.
 
-Run from a safe project:
+Run it from a project inside the Safe Agent `work/` directory:
 
 ```bash
-cd ~/git/safe-agent/work/example-project
+cd /path/to/safe-agent/work/example-project
 agent-start
 ```
 
@@ -181,13 +217,9 @@ agent-start opencode
 
 The explicit argument overrides `DEFAULT_AGENT`.
 
-The script refuses to start from directories outside:
+The script refuses to start from directories outside the Safe Agent `work/` directory.
 
-```text
-~/git/safe-agent/work/
-```
-
-Only the current safe project and the selected agent's persistent configuration directory are mounted into the container.
+Only the current safe project and the selected agent's required persistent state directories are mounted into the container.
 
 ### `agent-pull`
 
@@ -196,7 +228,7 @@ Updates the safe project from the corresponding real repository.
 Run from the safe project:
 
 ```bash
-cd ~/git/safe-agent/work/example-project
+cd /path/to/safe-agent/work/example-project
 agent-pull
 ```
 
@@ -207,6 +239,18 @@ REAL PROJECT
      |
      v
 SAFE AGENT COPY
+```
+
+The corresponding real project is determined from `REAL_PROJECT_ROOT` and the safe project's directory name.
+
+For example:
+
+```text
+REAL_PROJECT_ROOT/example-project
+
+        ↕
+
+safe-agent/work/example-project
 ```
 
 Synchronization is Git-based and uses committed history.
@@ -221,12 +265,12 @@ The real repository is never modified by this reset.
 
 ### `agent-push`
 
-Imports committed agent changes into the real project.
+Imports committed agent changes into the corresponding real project.
 
 Run from the safe project:
 
 ```bash
-cd ~/git/safe-agent/work/example-project
+cd /path/to/safe-agent/work/example-project
 agent-push
 ```
 
@@ -255,14 +299,14 @@ If the repositories have diverged, the push is refused rather than automatically
 Start with work in the real repository committed:
 
 ```bash
-cd ~/git/example-project
+cd "$REAL_PROJECT_ROOT/example-project"
 git status
 ```
 
 Move to the corresponding safe clone:
 
 ```bash
-cd ~/git/safe-agent/work/example-project
+cd /path/to/safe-agent/work/example-project
 ```
 
 Bring in the latest committed real-project changes:
@@ -303,30 +347,27 @@ agent-push
 
 Review the preview and confirm it.
 
-Then return to the real project:
-
-```bash
-cd ~/git/example-project
-```
-
-Test normally using the real development environment and `.env`.
+Then return to the real project and test normally using the real development environment and credentials.
 
 Push through the normal Git workflow when ready.
 
 ## Adding a Project
 
-Create a safe clone under `work/`:
+Create a safe clone inside Safe Agent's `work/` directory.
+
+For example:
 
 ```bash
-cd ~/git/safe-agent/work
-git clone ~/git/example-project example-project
+cd /path/to/safe-agent/work
+git clone "$REAL_PROJECT_ROOT/example-project" example-project
 ```
 
-The project directory name should match the real project directory name:
+The safe project directory name must match the corresponding real project directory name:
 
 ```text
-~/git/example-project
-~/git/safe-agent/work/example-project
+$REAL_PROJECT_ROOT/example-project
+
+/path/to/safe-agent/work/example-project
 ```
 
 Remove the automatically created local `origin`:
@@ -359,20 +400,41 @@ Files such as `.env.example` may be intentionally present if they contain only n
 
 ## Agent Configuration
 
-Persistent agent state is stored separately:
+Persistent agent state is stored under:
 
 ```text
-~/git/safe-agent/container/home/
+safe-agent/container/home/
+```
+
+Each agent has isolated persistent storage:
+
+```text
+container/home/
 ├── codex/
 ├── claude/
 └── opencode/
+    ├── config/
+    └── data/
 ```
 
-These directories allow authentication and configuration to survive container recreation.
+Codex state is persisted from:
 
-Only the selected agent's directory is mounted when `agent-start` runs.
+```text
+/root/.codex
+```
 
-These directories may contain authentication credentials and must:
+`CODEX_HOME` is explicitly set to this location.
+
+OpenCode uses separate persistent configuration and data directories:
+
+```text
+/root/.config/opencode
+/root/.local/share/opencode
+```
+
+These contain configuration, authentication, provider information, application data, and other persistent state.
+
+Agent state directories may contain authentication credentials and must:
 
 - remain excluded by `.gitignore`
 - never be shared
@@ -380,17 +442,25 @@ These directories may contain authentication credentials and must:
 
 ## Important Security Rules
 
-Do not modify the Docker launcher to mount:
+Do not modify the Docker launcher to mount broad host locations such as:
 
 ```text
-~/git
 ~
 ~/.ssh
 ~/.gitconfig
+REAL_PROJECT_ROOT
 /var/run/docker.sock
 ```
 
-The security boundary depends on the container having access only to the safe project copy and the selected agent's configuration directory.
+The security boundary depends on the container having access only to:
+
+```text
+the current safe project
++
+the selected agent's required persistent state
+```
+
+The real development repository is deliberately **not** mounted into the container.
 
 Never place real credentials in the safe project clone.
 
@@ -401,25 +471,25 @@ Keep secrets such as application `.env` files exclusively in the real developmen
 The intended trust boundary is:
 
 ```text
-                    HOST
+                         HOST
 
-        Real project
-        + credentials
-        + .env
-             ^
-             |
-       agent-push/pull
-             |
-             v
-       Safe Git clone
-             |
-             | bind mount
-             v
-    +-------------------+
-    |  Agent container  |
-    |                   |
-    |    /workspace     |
-    +-------------------+
+                 Real project
+                 + credentials
+                 + .env
+                      ^
+                      |
+                agent-push/pull
+                      |
+                      v
+                 Safe Git clone
+                      |
+                      | bind mount
+                      v
+             +-------------------+
+             |  Agent container  |
+             |                   |
+             |    /workspace     |
+             +-------------------+
 ```
 
 The coding agent operates on a credential-free Git copy.
@@ -437,6 +507,7 @@ agent-pull
 agent-start
 agent-push
 test
+
 agent-pull
 agent-start
 agent-push

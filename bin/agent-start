@@ -2,7 +2,8 @@
 
 set -e
 
-SAFE_AGENT="$HOME/git/safe-agent"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+SAFE_AGENT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 AGENT_ROOT="$SAFE_AGENT/work"
 AGENT_HOME="$SAFE_AGENT/container/home"
 CONFIG_FILE="$SAFE_AGENT/.env"
@@ -98,8 +99,8 @@ echo
 echo "Workspace:"
 echo "  $CURRENT_DIR"
 echo
-echo "Only this workspace and the agent's persistent config"
-echo "directory will be mounted into the container."
+echo "Only this workspace and the agent's persistent state"
+echo "will be mounted into the container."
 echo
 
 EXTRA_MOUNTS=()
