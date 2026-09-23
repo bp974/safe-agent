@@ -440,6 +440,41 @@ Agent state directories may contain authentication credentials and must:
 - never be shared
 - never be committed to Git
 
+### Per-Project Extra Docker Mounts
+
+Some projects may require access to additional host directories, such as an SDK or toolchain that is not part of the project workspace.
+
+Create a `.safe-agent.conf` file in the root of the safe project:
+
+```bash
+EXTRA_DOCKER_MOUNTS=(
+    "/opt/nordic:/opt/nordic:ro"
+)
+```
+
+Each entry uses the standard Docker bind-mount format:
+
+```text
+host-path:container-path:mode
+```
+
+For example, the configuration above makes the host's `/opt/nordic` directory available at `/opt/nordic` inside the agent container.
+
+Use `:ro` whenever the agent only needs to read the directory. This preserves Safe Agent's principle of exposing only the host resources required by a specific project.
+
+Multiple mounts can be specified:
+
+```bash
+EXTRA_DOCKER_MOUNTS=(
+    "/opt/nordic:/opt/nordic:ro"
+    "/some/other/path:/tools/example:ro"
+)
+```
+
+> **Note:** `.safe-agent.conf` is sourced as shell code by `agent-start`. Only use configuration files you trust and review them before running the agent.
+
+On Docker Desktop, the host path may also need to be allowed under **Settings → Resources → File Sharing** before Docker can mount it.
+
 ## Important Security Rules
 
 Do not modify the Docker launcher to mount broad host locations such as:

@@ -47,6 +47,22 @@ case "$CURRENT_DIR" in
         ;;
 esac
 
+# Load optional per-project safe-agent configuration.
+PROJECT_CONFIG="$CURRENT_DIR/.safe-agent.conf"
+
+EXTRA_DOCKER_MOUNTS=()
+
+if [ -f "$PROJECT_CONFIG" ]; then
+    # shellcheck disable=SC1090
+    source "$PROJECT_CONFIG"
+fi
+
+EXTRA_DOCKER_ARGS=()
+
+for mount in "${EXTRA_DOCKER_MOUNTS[@]}"; do
+    EXTRA_DOCKER_ARGS+=(-v "$mount")
+done
+
 SECOND_HOME_MOUNT=""
 SECOND_CONTAINER_HOME=""
 
@@ -117,6 +133,7 @@ docker run --rm -it \
     --env CODEX_HOME=/root/.codex \
     --mount type=bind,source="$HOME_MOUNT",target="$CONTAINER_HOME" \
     "${EXTRA_MOUNTS[@]}" \
+    "${EXTRA_DOCKER_ARGS[@]}" \
     --mount type=bind,source="$CURRENT_DIR",target=/workspace \
     --workdir /workspace \
     safe-agent \
