@@ -47,14 +47,22 @@ case "$CURRENT_DIR" in
         ;;
 esac
 
-# Load optional per-project safe-agent configuration.
-PROJECT_CONFIG="$CURRENT_DIR/.safe-agent.conf"
+# Load optional per-project data-only configuration.
+PROJECT_CONFIG="$CURRENT_DIR/.safe-agent.toml"
 
 EXTRA_DOCKER_MOUNTS=()
 
 if [ -f "$PROJECT_CONFIG" ]; then
-    # shellcheck disable=SC1090
-    source "$PROJECT_CONFIG"
+    CONFIG_OUTPUT=""
+    if ! CONFIG_OUTPUT="$(python3 "$SCRIPT_DIR/read-safe-agent-config.py" "$PROJECT_CONFIG")"; then
+        exit 1
+    fi
+    while IFS= read -r mount; do
+        [ -n "$mount" ] && EXTRA_DOCKER_MOUNTS+=("$mount")
+    done <<< "$CONFIG_OUTPUT"
+elif [ -f "$CURRENT_DIR/.safe-agent.conf" ]; then
+    echo "ERROR: Found unsupported .safe-agent.conf. Rename it to .safe-agent.toml and convert it to TOML."
+    exit 1
 fi
 
 EXTRA_DOCKER_ARGS=()

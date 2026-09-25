@@ -444,34 +444,42 @@ Agent state directories may contain authentication credentials and must:
 
 Some projects may require access to additional host directories, such as an SDK or toolchain that is not part of the project workspace.
 
-Create a `.safe-agent.conf` file in the root of the safe project:
+Create a `.safe-agent.toml` file in the root of the safe project:
 
-```bash
-EXTRA_DOCKER_MOUNTS=(
-    "/opt/nordic:/opt/nordic:ro"
-)
+```toml
+[[mounts]]
+host = "/opt/nordic"
+container = "/opt/nordic"
+mode = "ro"
 ```
 
-Each entry uses the standard Docker bind-mount format:
+Each mount has three fields:
 
-```text
-host-path:container-path:mode
+```toml
+host = "host path on the machine"
+container = "path inside the agent container"
+mode = "ro or rw"
 ```
 
 For example, the configuration above makes the host's `/opt/nordic` directory available at `/opt/nordic` inside the agent container.
 
-Use `:ro` whenever the agent only needs to read the directory. This preserves Safe Agent's principle of exposing only the host resources required by a specific project.
+Use `mode = "ro"` whenever the agent only needs to read the directory. This preserves Safe Agent's principle of exposing only the host resources required by a specific project.
 
-Multiple mounts can be specified:
+Multiple mounts can be specified with multiple `[[mounts]]` tables:
 
-```bash
-EXTRA_DOCKER_MOUNTS=(
-    "/opt/nordic:/opt/nordic:ro"
-    "/some/other/path:/tools/example:ro"
-)
+```toml
+[[mounts]]
+host = "/opt/nordic"
+container = "/opt/nordic"
+mode = "ro"
+
+[[mounts]]
+host = "/some/other/path"
+container = "/tools/example"
+mode = "ro"
 ```
 
-> **Note:** `.safe-agent.conf` is sourced as shell code by `agent-start`. Only use configuration files you trust and review them before running the agent.
+The configuration is parsed as TOML data by `agent-start`; it is not sourced as shell code. This requires Python 3.11 or newer. Unknown mount fields and invalid paths or modes are rejected.
 
 On Docker Desktop, the host path may also need to be allowed under **Settings → Resources → File Sharing** before Docker can mount it.
 
