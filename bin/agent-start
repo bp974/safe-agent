@@ -91,15 +91,6 @@ for host_entry in "${EXTRA_DOCKER_HOSTS[@]}"; do
     host_name="${host_entry%%=*}"
     host_value="${host_entry#*=}"
 
-    if [ "$host_value" = "wsl-default-gateway" ]; then
-        host_value="$(ip route | awk '/default/ {print $3; exit}')"
-
-        if [ -z "$host_value" ]; then
-            echo "ERROR: Could not determine WSL default gateway."
-            exit 1
-        fi
-    fi
-
     EXTRA_DOCKER_ARGS+=(--add-host="$host_name:$host_value")
 done
 
