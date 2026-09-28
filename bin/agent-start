@@ -96,6 +96,7 @@ done
 
 SECOND_HOME_MOUNT=""
 SECOND_CONTAINER_HOME=""
+COMMAND_ARGS=()
 
 # Configure the selected agent.
 case "$AGENT" in
@@ -113,6 +114,7 @@ case "$AGENT" in
 
     opencode)
         COMMAND="opencode"
+        COMMAND_ARGS=("--standalone")
         HOME_MOUNT="$AGENT_HOME/opencode/config"
         CONTAINER_HOME="/root/.config/opencode"
 
@@ -178,4 +180,4 @@ docker run --rm -it \
         fi
 
         exec "$@"
-    ' bash "$COMMAND"
+    ' bash "$COMMAND" "${COMMAND_ARGS[@]}"
