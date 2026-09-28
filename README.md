@@ -483,6 +483,37 @@ The configuration is parsed as TOML data by `agent-start`; it is not sourced as 
 
 On Docker Desktop, the host path may also need to be allowed under **Settings → Resources → File Sharing** before Docker can mount it.
 
+### Per-Project Docker Host Mappings
+
+Projects that need to reach a service running on the host can add Docker host
+mappings to the same `.safe-agent.toml` file:
+
+```toml
+[docker.hosts]
+"host.docker.internal" = "host-gateway"
+```
+
+This makes `host.docker.internal` resolve to the Docker host gateway inside the
+agent container. Docker resolves the special `host-gateway` value when the
+container starts; Safe Agent does not need to inspect the host's network routes.
+
+The host name can be a project-specific alias, and multiple mappings are
+supported:
+
+```toml
+[docker.hosts]
+"fusion-host" = "host-gateway"
+"test-api.local" = "192.168.1.50"
+```
+
+Use the configured name from inside the container when connecting to the host
+service. Host names containing dots must be quoted because dots have special
+meaning in TOML keys.
+
+Application-specific integration recipes are available in
+[`docs/integrations/`](docs/integrations/), including guidance for connecting
+to a Fusion 360 MCP server from WSL2.
+
 ## Important Security Rules
 
 Do not modify the Docker launcher to mount broad host locations such as:
